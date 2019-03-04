@@ -19,3 +19,7 @@ Output:
 ![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Output%20with%20%20cut.png)
 
 ![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Output.png)
+
+Minimum error boundary cut:
+
+![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Error%20boundary%20cut.png)
