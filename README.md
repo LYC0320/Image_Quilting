@@ -30,6 +30,16 @@ Output:
 
 ![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Output02.png)
 
+Lobelia:
+
+![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Image_Quilting/texture/lobelia.bmp)
+
+Output:
+
+![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Output03%20with%20cut.png)
+
+![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Output03.png)
+
 Minimum error boundary cut:
 
 ![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/Error%20boundary%20cut.png)
