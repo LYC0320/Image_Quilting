@@ -5,89 +5,15 @@
 #include <math.h>
 #include <time.h>
 #include <vector>
+#include "Distance.h"
+#include "BoundaryCut.h"
 
 using namespace std;
 using namespace cv;
 
-pair<int, int> SSD(Mat s, Mat t, int patchN)
-{
-	float myMin = INT_MAX;
-	pair<int, int> p;
-
-	for (int ox = 0; ox <= s.rows - patchN; ox++)
-	{
-		for (int oy = 0; oy <= s.cols - patchN; oy++)
-		{
-			float d = 0;
-
-			for (int ix = 0; ix < t.rows; ix++)
-			{
-				for (int iy = 0; iy < t.cols; iy++)
-				{
-					d += sqrt(pow((float)s.at<Vec3b>(ox + ix, oy + iy)[0] - (float)t.at<Vec3b>(ix, iy)[0], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[1] - (float)t.at<Vec3b>(ix, iy)[1], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[2] - (float)t.at<Vec3b>(ix, iy)[2], 2));
-				}
-			}
-
-			if (d < myMin)
-			{
-				myMin = d;
-				p = { ox, oy };
-			}
-		}
-	}
-	cout << "Single:" << p.first << "," << p.second << ":" << myMin << endl;
-
-	return p;
-}
-
-pair<int, int> BSSD(Mat s, Mat t1, Mat t2, int patchN)
-{
-	float myMin = INT_MAX;
-	pair<int, int> p;
-
-	for (int ox = 0; ox <= s.rows - patchN; ox++)
-	{
-		for (int oy = 0; oy <= s.cols - patchN; oy++)
-		{
-			float d = 0;
-
-			for (int ix = 0; ix < t1.rows; ix++)
-			{
-				for (int iy = 0; iy < t1.cols; iy++)
-				{
-					d += sqrt(pow((float)s.at<Vec3b>(ox + ix, oy + iy)[0] - (float)t1.at<Vec3b>(ix, iy)[0], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[1] - (float)t1.at<Vec3b>(ix, iy)[1], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[2] - (float)t1.at<Vec3b>(ix, iy)[2], 2));
-				}
-			}
-
-			for (int ix = 0; ix < t2.rows; ix++)
-			{
-				for (int iy = 0; iy < t2.cols; iy++)
-				{
-					d += sqrt(pow((float)s.at<Vec3b>(ox + ix, oy + iy)[0] - (float)t2.at<Vec3b>(ix, iy)[0], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[1] - (float)t2.at<Vec3b>(ix, iy)[1], 2)
-						+ pow((float)s.at<Vec3b>(ox + ix, oy + iy)[2] - (float)t2.at<Vec3b>(ix, iy)[2], 2));
-				}
-			}
-
-			if (d < myMin)
-			{
-				myMin = d;
-				p = { ox, oy };
-			}
-		}
-	}
-	cout << "Double:" << p.first << "," << p.second << ":" << myMin << endl;
-
-	return p;
-}
-
 int main()
 {
-	Mat image01 = imread("texture/rock.bmp");
+	Mat image01 = imread("texture/lobelia.bmp");
 	Mat targetImg = Mat(512, 512, CV_8UC3);
 	Mat targetWithCut = Mat(targetImg.rows, targetImg.cols, CV_8UC3);
 	Mat blendingTest = Mat(targetImg.rows, targetImg.cols, CV_8UC3);;
@@ -117,12 +43,14 @@ int main()
 
 	sourcePatches.push_back({ randomX, randomY });
 
+	// NNF
 	for (int ox = 0; ox < patchRowNum; ox++)
 	{
 		for (int oy = 0; oy < patchColNum; oy++)
 		{
 			Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8UC3);
 			Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8UC3);
+			Distance d;
 
 			if (ox == 0 && oy == 0)
 				continue;
@@ -138,7 +66,7 @@ int main()
 					}
 				}
 
-				sourcePatches.push_back(SSD(image01, overlapRightPatch, patchN));
+				sourcePatches.push_back(d.SSD(image01, overlapRightPatch, patchN));
 			}
 
 			// col1
@@ -153,7 +81,7 @@ int main()
 					}
 				}
 
-				sourcePatches.push_back(SSD(image01, overlapDownPatch, patchN));
+				sourcePatches.push_back(d.SSD(image01, overlapDownPatch, patchN));
 			}
 
 			// except row1 and col1
@@ -177,7 +105,7 @@ int main()
 					}
 				}
 
-				sourcePatches.push_back(BSSD(image01, overlapRightPatch, overlapDownPatch, patchN));
+				sourcePatches.push_back(d.BSSD(image01, overlapRightPatch, overlapDownPatch, patchN));
 			}
 		}
 
@@ -186,8 +114,6 @@ int main()
 	// minimum error boundary cut
 
 	vector<vector<pair<int, int>>> allMebc(1, vector<pair<int, int>>(patchN, { 0, 0 }));
-	vector<vector<vector<int>>> allOverlapCost(1, vector<vector<int>>(0, vector<int>(0, 0)));
-
 
 	for (int i = 1; i < sourcePatches.size(); i++)
 	{
@@ -195,382 +121,20 @@ int main()
 		Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8U);
 		vector<vector<int>> rightCost(patchN, vector<int>(overlapPatchW, 0));
 		vector<vector<int>> downCost(overlapPatchW, vector<int>(patchN, 0));
+		BoundaryCut bc;
 
 		if (i < patchColNum)
 		{
-			// distance map
-			for (int ox = 0; ox < patchN; ox++)
-			{
-				for (int oy = 0; oy < overlapPatchW; oy++)
-				{
-					overlapRightPatch.at<uchar>(ox, oy) = sqrt(pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[0]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[0], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[1]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[1], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[2]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[2], 2)) / sqrt(255.0*255.0*3.0)*255.0;
-
-				}
-			}
-
-			// dp
-			for (int ox = 0; ox < patchN; ox++)
-			{
-				for (int oy = 0; oy < overlapPatchW; oy++)
-				{
-					if (ox == 0)
-						rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy);
-					else
-					{
-						if (oy == 0)
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(rightCost[ox - 1][oy], rightCost[ox - 1][oy + 1]);
-						}
-						else if (oy == overlapPatchW - 1)
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(rightCost[ox - 1][oy - 1], rightCost[ox - 1][oy]);
-						}
-						else
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(min(rightCost[ox - 1][oy - 1], rightCost[ox - 1][oy]), rightCost[ox - 1][oy + 1]);
-						}
-					}
-				}
-			}
-
-			allOverlapCost.push_back(rightCost);
-
-			// trace back cut
-			vector<pair<int, int>> mebc(patchN, { 0, 0 });
-
-			for (int ox = patchN - 1; ox >= 0; ox--)
-			{
-				int x, y;
-
-				if (ox == patchN - 1)
-				{
-					int myMin = INT_MAX;
-					for (int oy = 0; oy < overlapPatchW; oy++)
-					{
-
-						if (rightCost[ox][oy] < myMin)
-						{
-							myMin = rightCost[ox][oy];
-							x = ox;
-							y = oy;
-						}
-					}
-				}
-				else
-				{
-					int myMin = INT_MAX;
-
-					for (int oy = -1; oy < 2; oy++)
-					{
-						int newOy = mebc[ox + 1].second + oy;
-						if (newOy < 0 || newOy >= overlapPatchW)
-							continue;
-
-						if (rightCost[ox][newOy] < myMin)
-						{
-							myMin = rightCost[ox][newOy];
-							x = ox;
-							y = newOy;
-						}
-					}
-				}
-				mebc[ox] = { x, y };
-			}
-
-			allMebc.push_back(mebc);
-
+			bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, image01, sourcePatches, i);
 		}
 		else if (i%patchColNum == 0)
 		{
-
-			// distance map
-			for (int ox = 0; ox < overlapPatchW; ox++)
-			{
-				for (int oy = 0; oy < patchN; oy++)
-				{
-					overlapDownPatch.at<uchar>(ox, oy) = sqrt(pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[0]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[0], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[1]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[1], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[2]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[2], 2)) / sqrt(255.0*255.0*3.0)*255.0;
-
-				}
-			}
-
-			// dp
-			for (int oy = 0; oy < patchN; oy++)
-			{
-				for (int ox = 0; ox < overlapPatchW; ox++)
-				{
-					if (oy == 0)
-						downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy);
-					else
-					{
-						if (ox == 0)
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(downCost[ox][oy - 1], downCost[ox + 1][oy - 1]);
-						}
-						else if (ox == overlapPatchW - 1)
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(downCost[ox - 1][oy - 1], downCost[ox][oy - 1]);
-						}
-						else
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(min(downCost[ox - 1][oy - 1], downCost[ox][oy - 1]), downCost[ox + 1][oy - 1]);
-						}
-					}
-				}
-			}
-
-			allOverlapCost.push_back(downCost);
-
-			// trace back cut
-			vector<pair<int, int>> mebc(patchN, { 0, 0 });
-
-			for (int oy = patchN - 1; oy >= 0; oy--)
-			{
-				int x, y;
-
-				if (oy == patchN - 1)
-				{
-					int myMin = INT_MAX;
-					for (int ox = 0; ox < overlapPatchW; ox++)
-					{
-
-						if (downCost[ox][oy] < myMin)
-						{
-							myMin = downCost[ox][oy];
-							x = ox;
-							y = oy;
-						}
-					}
-				}
-				else
-				{
-					int myMin = INT_MAX;
-
-					for (int ox = -1; ox < 2; ox++)
-					{
-						int newOx = mebc[oy + 1].first + ox;
-						if (newOx < 0 || newOx >= overlapPatchW)
-							continue;
-
-						if (downCost[newOx][oy] < myMin)
-						{
-							myMin = downCost[newOx][oy];
-							x = newOx;
-							y = oy;
-						}
-					}
-				}
-
-				mebc[oy] = { x, y };
-			}
-
-			allMebc.push_back(mebc);
+			bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, image01, sourcePatches, i, patchColNum);
 		}
 		else
 		{
-			// distance map
-			for (int ox = 0; ox < patchN; ox++)
-			{
-				for (int oy = 0; oy < overlapPatchW; oy++)
-				{
-					overlapRightPatch.at<uchar>(ox, oy) = sqrt(pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[0]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[0], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[1]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[1], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i - 1].first + ox, sourcePatches[i - 1].second + oy + patchOffset)[2]
-						- image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[2], 2)) / sqrt(255.0*255.0*3.0)*255.0;
-
-				}
-			}
-
-			// dp
-			for (int ox = 0; ox < patchN; ox++)
-			{
-				for (int oy = 0; oy < overlapPatchW; oy++)
-				{
-					if (ox == 0)
-						rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy);
-					else
-					{
-						if (oy == 0)
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(rightCost[ox - 1][oy], rightCost[ox - 1][oy + 1]);
-						}
-						else if (oy == overlapPatchW - 1)
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(rightCost[ox - 1][oy - 1], rightCost[ox - 1][oy]);
-						}
-						else
-						{
-							rightCost[ox][oy] = (int)overlapRightPatch.at<uchar>(ox, oy)
-								+ min(min(rightCost[ox - 1][oy - 1], rightCost[ox - 1][oy]), rightCost[ox - 1][oy + 1]);
-						}
-					}
-				}
-			}
-
-			allOverlapCost.push_back(rightCost);
-
-			// trace back cut
-			vector<pair<int, int>> mebc(patchN, { 0, 0 });
-
-			for (int ox = patchN - 1; ox >= 0; ox--)
-			{
-
-				int x, y;
-
-				if (ox == patchN - 1)
-				{
-					int myMin = INT_MAX;
-					for (int oy = 0; oy < overlapPatchW; oy++)
-					{
-
-						if (rightCost[ox][oy] < myMin)
-						{
-							myMin = rightCost[ox][oy];
-							x = ox;
-							y = oy;
-						}
-					}
-				}
-				else
-				{
-					int myMin = INT_MAX;
-
-					for (int oy = -1; oy < 2; oy++)
-					{
-						int newOy = mebc[ox + 1].second + oy;
-						if (newOy < 0 || newOy >= overlapPatchW)
-							continue;
-
-						if (rightCost[ox][newOy] < myMin)
-						{
-							myMin = rightCost[ox][newOy];
-							x = ox;
-							y = newOy;
-						}
-					}
-				}
-
-				mebc[ox] = { x, y };
-			}
-
-			allMebc.push_back(mebc);
-
-			// distance map
-			for (int ox = 0; ox < overlapPatchW; ox++)
-			{
-				for (int oy = 0; oy < patchN; oy++)
-				{
-					overlapDownPatch.at<uchar>(ox, oy) = sqrt(pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[0]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[0], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[1]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[1], 2)
-
-						+ pow(image01.at<Vec3b>(sourcePatches[i].first + ox, sourcePatches[i].second + oy)[2]
-						- image01.at<Vec3b>(sourcePatches[i - patchColNum].first + ox + patchOffset, sourcePatches[i - patchColNum].second + oy)[2], 2)) / sqrt(255.0*255.0*3.0)*255.0;
-
-				}
-			}
-
-			// dp
-			for (int oy = 0; oy < patchN; oy++)
-			{
-				for (int ox = 0; ox < overlapPatchW; ox++)
-				{
-					if (oy == 0)
-						downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy);
-					else
-					{
-						if (ox == 0)
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(downCost[ox][oy - 1], downCost[ox + 1][oy - 1]);
-						}
-						else if (ox == overlapPatchW - 1)
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(downCost[ox - 1][oy - 1], downCost[ox][oy - 1]);
-						}
-						else
-						{
-							downCost[ox][oy] = (int)overlapDownPatch.at<uchar>(ox, oy)
-								+ min(min(downCost[ox - 1][oy - 1], downCost[ox][oy - 1]), downCost[ox + 1][oy - 1]);
-						}
-					}
-				}
-			}
-
-			allOverlapCost.push_back(downCost);
-
-			// trace back cut
-			mebc = vector<pair<int, int>>(patchN, { 0, 0 });
-
-			for (int oy = patchN - 1; oy >= 0; oy--)
-			{
-				int x, y;
-
-				if (oy == patchN - 1)
-				{
-					int myMin = INT_MAX;
-					for (int ox = 0; ox < overlapPatchW; ox++)
-					{
-
-						if (downCost[ox][oy] < myMin)
-						{
-							myMin = downCost[ox][oy];
-							x = ox;
-							y = oy;
-						}
-					}
-				}
-				else
-				{
-					int myMin = INT_MAX;
-
-					for (int ox = -1; ox < 2; ox++)
-					{
-						int newOx = mebc[oy + 1].first + ox;
-						if (newOx < 0 || newOx >= overlapPatchW)
-							continue;
-
-						if (downCost[newOx][oy] < myMin)
-						{
-							myMin = downCost[newOx][oy];
-							x = newOx;
-							y = oy;
-						}
-					}
-				}
-
-				mebc[oy] = { x, y };
-			}
-
-			allMebc.push_back(mebc);
+			bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, image01, sourcePatches, i);
+			bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, image01, sourcePatches, i, patchColNum);
 		}
 	}
 
@@ -578,7 +142,7 @@ int main()
 	Mat test = Mat(patchN, overlapPatchW, CV_8U);
 	Mat test2 = Mat(patchN, overlapPatchW, CV_8U);
 
-	/*for (int ox = 0; ox < patchN; ox++)
+	for (int ox = 0; ox < patchN; ox++)
 	{
 		for (int oy = 0; oy < overlapPatchW; oy++)
 		{
@@ -596,7 +160,7 @@ int main()
 			if (ox == allMebc[20][ox].first && oy == allMebc[20][ox].second)
 				test.at<uchar>(ox, oy) = 255;
 		}
-	}*/
+	}
 
 	// quilting along cut
 
