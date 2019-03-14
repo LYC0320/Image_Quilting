@@ -26,4 +26,4 @@ Bill:
 
 Output:
 
-![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/patchN%3D30_a%3D0.3.png)
+![alt text](https://github.com/LYC0320/Image_Quilting/blob/master/Results/bill2rice_30_0.3.png)
