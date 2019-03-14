@@ -13,376 +13,535 @@ using namespace cv;
 
 int main()
 {
-	Mat image01 = imread("texture/lobelia.bmp");
-	Mat targetImg = Mat(512, 512, CV_8UC3);
-	Mat targetWithCut = Mat(targetImg.rows, targetImg.cols, CV_8UC3);
-	Mat blendingTest = Mat(targetImg.rows, targetImg.cols, CV_8UC3);;
+	time_t s = time(NULL);
 
+	bool imgQuliting = 0, texTransfer = 1;
 
-	const int patchN = 48;
-	const int overlapPatchW = patchN / 6;
-	const int patchOffset = patchN - overlapPatchW;
-	const int patchRowNum = (targetImg.rows%patchOffset == 0) ? targetImg.rows / patchOffset : targetImg.rows / patchOffset + 1;
-	const int patchColNum = (targetImg.cols%patchOffset == 0) ? targetImg.cols / patchOffset : targetImg.cols / patchOffset + 1;
+	Mat srcImg = imread("texture/rice.bmp");
+	Mat targetImg = imread("texture/bill-big-big.jpg");
+	Mat outputImg;
 
-	Mat boundaryTest = Mat(image01.rows * 4, image01.cols * 4, CV_8U);
+	if (imgQuliting)
+		outputImg = Mat(512, 512, CV_8UC3);
+	else if (texTransfer)
+		outputImg = Mat(targetImg.rows, targetImg.cols, CV_8UC3);
+
+	Mat outputWithCut = Mat(outputImg.rows, outputImg.cols, CV_8UC3);
+
+	vector<Mat> results;
+
+	int patchN = 18;
+	int overlapPatchW = patchN / 6;
+	int patchOffset = patchN - overlapPatchW;
+	int patchRowNum = (outputImg.rows % patchOffset == 0) ? outputImg.rows / patchOffset : outputImg.rows / patchOffset + 1;
+	int patchColNum = (outputImg.cols % patchOffset == 0) ? outputImg.cols / patchOffset : outputImg.cols / patchOffset + 1;
 
 	vector<pair<int, int>> sourcePatches;
 
-	cout << "Input size:" << image01.rows << "," << image01.cols << endl;
-	cout << "Target patch row number:" << patchRowNum << endl;
-	cout << "Target patch column number:" << patchColNum << endl;
-	cout << "Overlap patch size:" << overlapPatchW << endl;
-	cout << "Patch offset:" << patchOffset << endl;
-	cout << endl;
+	Mat srcImgHSV;
+	cvtColor(srcImg, srcImgHSV, CV_BGR2HSV);
+	vector<Mat> srcChannels;
+	split(srcImgHSV, srcChannels);
 
-	srand(time(NULL));
+	int iteration;
 
-	int randomX = rand() % (image01.rows - patchN);
-	int randomY = rand() % (image01.cols - patchN);
+	if (texTransfer)
+		iteration = 1;
+	else if (imgQuliting)
+		iteration = 1;
 
-	sourcePatches.push_back({ randomX, randomY });
-
-	// NNF
-	for (int ox = 0; ox < patchRowNum; ox++)
+	for (int N = 0; N < iteration; N++)
 	{
-		for (int oy = 0; oy < patchColNum; oy++)
+		cout << "Iteration:" << N << endl;
+
+		if (N > 0)
 		{
-			Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8UC3);
-			Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8UC3);
-			Distance d;
-
-			if (ox == 0 && oy == 0)
-				continue;
-
-			// row1
-			if (ox == 0)
-			{
-				for (int ix = 0; ix < overlapRightPatch.rows; ix++)
-				{
-					for (int iy = 0; iy < overlapRightPatch.cols; iy++)
-					{
-						overlapRightPatch.at<Vec3b>(ix, iy) = image01.at<Vec3b>(sourcePatches.back().first + ix, sourcePatches.back().second + iy + patchOffset);
-					}
-				}
-
-				sourcePatches.push_back(d.SSD(image01, overlapRightPatch, patchN));
-			}
-
-			// col1
-			if (ox > 0 && oy == 0)
-			{
-				for (int ix = 0; ix < overlapDownPatch.rows; ix++)
-				{
-					for (int iy = 0; iy < overlapDownPatch.cols; iy++)
-					{
-						overlapDownPatch.at<Vec3b>(ix, iy) = image01.at<Vec3b>(sourcePatches[sourcePatches.size() - patchColNum].first + ix + patchOffset,
-							sourcePatches[sourcePatches.size() - patchColNum].second + iy);
-					}
-				}
-
-				sourcePatches.push_back(d.SSD(image01, overlapDownPatch, patchN));
-			}
-
-			// except row1 and col1
-			if (ox > 0 && oy > 0)
-			{
-				for (int ix = 0; ix < overlapRightPatch.rows; ix++)
-				{
-					for (int iy = 0; iy < overlapRightPatch.cols; iy++)
-					{
-						overlapRightPatch.at<Vec3b>(ix, iy) = image01.at<Vec3b>(sourcePatches.back().first + ix,
-							sourcePatches.back().second + iy + patchOffset);
-					}
-				}
-
-				for (int ix = 0; ix < overlapDownPatch.rows; ix++)
-				{
-					for (int iy = 0; iy < overlapDownPatch.cols; iy++)
-					{
-						overlapDownPatch.at<Vec3b>(ix, iy) = image01.at<Vec3b>(sourcePatches[sourcePatches.size() - patchColNum].first + ix + patchOffset,
-							sourcePatches[sourcePatches.size() - patchColNum].second + iy);
-					}
-				}
-
-				sourcePatches.push_back(d.BSSD(image01, overlapRightPatch, overlapDownPatch, patchN));
-			}
+			targetImg = outputImg;
+			patchN = patchN * sqrt(0.6666667);
+			overlapPatchW = patchN / 6;
+			patchOffset = patchN - overlapPatchW;
+			patchRowNum = (outputImg.rows % patchOffset == 0) ? outputImg.rows / patchOffset : outputImg.rows / patchOffset + 1;
+			patchColNum = (outputImg.cols % patchOffset == 0) ? outputImg.cols / patchOffset : outputImg.cols / patchOffset + 1;
 		}
 
-	}
+		
+		Mat targetImgHSV;
+		cvtColor(targetImg, targetImgHSV, CV_BGR2HSV);
+		vector<Mat> targetChannels;
+		split(targetImgHSV, targetChannels);
 
-	// minimum error boundary cut
+		cout << "Source size:" << srcImg.rows << "," << srcImg.cols << endl;
+		cout << "Target size:" << targetImg.rows << "," << targetImg.cols << endl;
+		cout << "Target patch row number:" << patchRowNum << endl;
+		cout << "Target patch column number:" << patchColNum << endl;
+		cout << "Overlap patch size:" << overlapPatchW << endl;
+		cout << "Patch offset:" << patchOffset << endl;
+		cout << endl;
 
-	vector<vector<pair<int, int>>> allMebc(1, vector<pair<int, int>>(patchN, { 0, 0 }));
+		vector<pair<int, int>> sourcePatches2;
 
-	for (int i = 1; i < sourcePatches.size(); i++)
-	{
-		Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8U);
-		Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8U);
-		vector<vector<int>> rightCost(patchN, vector<int>(overlapPatchW, 0));
-		vector<vector<int>> downCost(overlapPatchW, vector<int>(patchN, 0));
-		BoundaryCut bc;
+		
+		float a;
 
-		if (i < patchColNum)
-		{
-			bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, image01, sourcePatches, i);
-		}
-		else if (i%patchColNum == 0)
-		{
-			bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, image01, sourcePatches, i, patchColNum);
-		}
+		if (N < 2)
+			a = 0.3;
 		else
+			a = 0.8 * (N - 1) / (iteration - 1) + 0.1;
+
+		if (texTransfer)
 		{
-			bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, image01, sourcePatches, i);
-			bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, image01, sourcePatches, i, patchColNum);
-		}
-	}
-
-	// Boundary cut test
-	Mat test = Mat(patchN, overlapPatchW, CV_8U);
-	Mat test2 = Mat(patchN, overlapPatchW, CV_8U);
-
-	for (int ox = 0; ox < patchN; ox++)
-	{
-		for (int oy = 0; oy < overlapPatchW; oy++)
-		{
-			test.at<uchar>(ox, oy) = sqrt(pow(image01.at<Vec3b>(sourcePatches[16].first + ox, sourcePatches[16].second + oy + patchOffset)[0]
-				- image01.at<Vec3b>(sourcePatches[17].first + ox, sourcePatches[17].second + oy)[0], 2)
-
-				+ pow(image01.at<Vec3b>(sourcePatches[16].first + ox, sourcePatches[16].second + oy + patchOffset)[1]
-				- image01.at<Vec3b>(sourcePatches[17].first + ox, sourcePatches[17].second + oy)[1], 2)
-
-				+ pow(image01.at<Vec3b>(sourcePatches[16].first + ox, sourcePatches[16].second + oy + patchOffset)[2]
-				- image01.at<Vec3b>(sourcePatches[17].first + ox, sourcePatches[17].second + oy)[2], 2)) / sqrt(255.0*255.0*3.0)*255.0;
-
-			test2.at<uchar>(ox, oy) = test.at<uchar>(ox, oy);
-
-			if (ox == allMebc[20][ox].first && oy == allMebc[20][ox].second)
-				test.at<uchar>(ox, oy) = 255;
-		}
-	}
-
-	// quilting along cut
-
-	int patchIndex = 0;
-	int boundaryIndex = 0;
-
-	for (int ox = 0; ox < targetImg.rows; ox += patchOffset)
-	{
-		for (int oy = 0; oy < targetImg.cols; oy += patchOffset)
-		{
-			// row1
-			if (patchIndex < patchColNum)
+			// NNF
+			for (int ox = 0; ox < patchRowNum; ox++)
 			{
-				for (int ix = 0; ix < patchN; ix++)
+				for (int oy = 0; oy < patchColNum; oy++)
 				{
-					if (ox + ix >= targetImg.rows)
-						break;
+					int squarePatchRow = (patchOffset * ox + patchN < outputImg.rows) ? patchN : (outputImg.rows - (patchOffset * ox));
+					int squarePatchCol = (patchOffset * oy + patchN < outputImg.cols) ? patchN : (outputImg.cols - (patchOffset * oy));
 
-					if (patchIndex == 0)
+
+					Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8UC3);
+					Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8UC3);
+					Mat overlapSquarePatch = Mat(squarePatchRow, squarePatchCol, CV_8U);
+					Distance d;
+
+					if (ox == 0 && oy == 0)
 					{
-						for (int iy = 0; iy < patchN; iy++)
+						for (int ix = 0; ix < overlapSquarePatch.rows; ix++)
 						{
-							if (oy + iy >= targetImg.cols)
-								break;
-							targetWithCut.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							targetImg.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
+							{
+								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix, iy);
+								//cout << (float)targetChannels.at(2).at<uchar>(ix, iy) << endl;
+							}
+						}
+						cout << ox << "," << oy << endl;
+						sourcePatches2.push_back(d.LSSD(srcChannels.at(2), overlapSquarePatch, patchN));
+
+						continue;
+					}
+
+					// row1
+					if (ox == 0)
+					{
+						for (int ix = 0; ix < overlapRightPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapRightPatch.cols; iy++)
+							{
+								overlapRightPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches2.back().first + ix, sourcePatches2.back().second + iy + patchOffset);
+							}
+						}
+
+						for (int ix = 0; ix < overlapSquarePatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
+							{
+								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
+								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
+							}
+						}
+
+						cout << ox << "," << oy << endl;
+						sourcePatches2.push_back(d.LAndSSD(srcImg, overlapRightPatch, srcChannels.at(2), overlapSquarePatch, patchN, a));
+					}
+
+					// col1
+					if (ox > 0 && oy == 0)
+					{
+						for (int ix = 0; ix < overlapDownPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapDownPatch.cols; iy++)
+							{
+								overlapDownPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches2[sourcePatches2.size() - patchColNum].first + ix + patchOffset,
+									sourcePatches2[sourcePatches2.size() - patchColNum].second + iy);
+							}
+						}
+
+						for (int ix = 0; ix < overlapSquarePatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
+							{
+								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
+								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
+							}
+						}
+						cout << ox << "," << oy << endl;
+						sourcePatches2.push_back(d.LAndSSD(srcImg, overlapDownPatch, srcChannels.at(2), overlapSquarePatch, patchN, a));
+					}
+
+					// except row1 and col1
+					if (ox > 0 && oy > 0)
+					{
+						for (int ix = 0; ix < overlapRightPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapRightPatch.cols; iy++)
+							{
+								overlapRightPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches2.back().first + ix,
+									sourcePatches2.back().second + iy + patchOffset);
+							}
+						}
+
+						for (int ix = 0; ix < overlapDownPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapDownPatch.cols; iy++)
+							{
+								overlapDownPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches2[sourcePatches2.size() - patchColNum].first + ix + patchOffset,
+									sourcePatches2[sourcePatches2.size() - patchColNum].second + iy);
+							}
+						}
+
+						for (int ix = 0; ix < overlapSquarePatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
+							{
+								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
+								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
+							}
+						}
+						cout << ox << "," << oy << endl;
+
+
+						sourcePatches2.push_back(d.LAndBSSD(srcImg, overlapRightPatch, overlapDownPatch, srcChannels.at(2), overlapSquarePatch, patchN, a));
+					}
+				}
+
+			}
+
+			sourcePatches = sourcePatches2;
+
+		}
+		else if (imgQuliting)
+		{
+			// NNF
+			srand(time(NULL));
+
+			int randomX = rand() % (srcImg.rows - patchN);
+			int randomY = rand() % (srcImg.cols - patchN);
+
+			sourcePatches.push_back({ randomX, randomY });
+
+			for (int ox = 0; ox < patchRowNum; ox++)
+			{
+				for (int oy = 0; oy < patchColNum; oy++)
+				{
+					Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8UC3);
+					Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8UC3);
+					Distance d;
+
+					if (ox == 0 && oy == 0)
+						continue;
+
+					// row1
+					if (ox == 0)
+					{
+						for (int ix = 0; ix < overlapRightPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapRightPatch.cols; iy++)
+							{
+								overlapRightPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches.back().first + ix, sourcePatches.back().second + iy + patchOffset);
+							}
+						}
+
+						sourcePatches.push_back(d.SSD(srcImg, overlapRightPatch, patchN));
+					}
+
+					// col1
+					if (ox > 0 && oy == 0)
+					{
+						for (int ix = 0; ix < overlapDownPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapDownPatch.cols; iy++)
+							{
+								overlapDownPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches[sourcePatches.size() - patchColNum].first + ix + patchOffset,
+									sourcePatches[sourcePatches.size() - patchColNum].second + iy);
+							}
+						}
+
+						sourcePatches.push_back(d.SSD(srcImg, overlapDownPatch, patchN));
+					}
+
+					// except row1 and col1
+					if (ox > 0 && oy > 0)
+					{
+						for (int ix = 0; ix < overlapRightPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapRightPatch.cols; iy++)
+							{
+								overlapRightPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches.back().first + ix,
+									sourcePatches.back().second + iy + patchOffset);
+							}
+						}
+
+						for (int ix = 0; ix < overlapDownPatch.rows; ix++)
+						{
+							for (int iy = 0; iy < overlapDownPatch.cols; iy++)
+							{
+								overlapDownPatch.at<Vec3b>(ix, iy) = srcImg.at<Vec3b>(sourcePatches[sourcePatches.size() - patchColNum].first + ix + patchOffset,
+									sourcePatches[sourcePatches.size() - patchColNum].second + iy);
+							}
+						}
+
+						sourcePatches.push_back(d.BSSD(srcImg, overlapRightPatch, overlapDownPatch, patchN));
+					}
+				}
+
+			}
+		}
+
+		// minimum error boundary cut
+
+		vector<vector<pair<int, int>>> allMebc(1, vector<pair<int, int>>(patchN, { 0, 0 }));
+
+		for (int i = 1; i < sourcePatches.size(); i++)
+		{
+			Mat overlapRightPatch = Mat(patchN, overlapPatchW, CV_8U);
+			Mat overlapDownPatch = Mat(overlapPatchW, patchN, CV_8U);
+			vector<vector<int>> rightCost(patchN, vector<int>(overlapPatchW, 0));
+			vector<vector<int>> downCost(overlapPatchW, vector<int>(patchN, 0));
+			BoundaryCut bc;
+
+			if (i < patchColNum)
+			{
+				bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, srcImg, sourcePatches, i);
+			}
+			else if (i%patchColNum == 0)
+			{
+				bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, srcImg, sourcePatches, i, patchColNum);
+			}
+			else
+			{
+				bc.computeRightCut(patchOffset, overlapRightPatch, allMebc, srcImg, sourcePatches, i);
+				bc.computeDownCut(patchOffset, overlapDownPatch, allMebc, srcImg, sourcePatches, i, patchColNum);
+			}
+		}
+
+		// quilting along cut
+
+		int patchIndex = 0;
+		int boundaryIndex = 0;
+
+		for (int ox = 0; ox < outputImg.rows; ox += patchOffset)
+		{
+			for (int oy = 0; oy < outputImg.cols; oy += patchOffset)
+			{
+				// row1
+				if (patchIndex < patchColNum)
+				{
+					for (int ix = 0; ix < patchN; ix++)
+					{
+						if (ox + ix >= outputImg.rows)
+							break;
+
+						if (patchIndex == 0)
+						{
+							for (int iy = 0; iy < patchN; iy++)
+							{
+								if (oy + iy >= outputImg.cols)
+									break;
+								outputWithCut.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+							}
+						}
+						else
+						{
+							for (int iy = allMebc[boundaryIndex][ix].second; iy < patchN; iy++)
+							{
+								if (oy + iy >= outputImg.cols)
+									break;
+								outputWithCut.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+
+								if (iy == allMebc[boundaryIndex][ix].second)
+								{
+									outputWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
+
+									Vec3f a = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+									Vec3f b = outputImg.at<Vec3b>(ox + ix, oy + iy);
+									Vec3f c = (a + b)*0.5;
+
+									outputImg.at<Vec3b>(ox + ix, oy + iy) = c;
+								}
+								else
+								{
+									outputImg.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								}
+
+							}
 						}
 					}
-					else
+					patchIndex++;
+					boundaryIndex++;
+				}
+				else if (patchIndex % patchColNum == 0)	// col1
+				{
+					for (int iy = 0; iy < patchN; iy++)
 					{
-						for (int iy = allMebc[boundaryIndex][ix].second; iy < patchN; iy++)
+						for (int ix = allMebc[boundaryIndex][iy].first; ix < patchN; ix++)
 						{
-							if (oy + iy >= targetImg.cols)
+							if (ox + ix >= outputImg.rows)
 								break;
-							targetWithCut.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							targetImg.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
 
-							if (iy == allMebc[boundaryIndex][ix].second)
+							// row2
+							if (patchIndex == patchColNum)
 							{
-								targetWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
+								if (ix + patchN - overlapPatchW < patchN)
+								{
+									//上一個row的right cut
+									if (iy >= allMebc[boundaryIndex - (patchColNum - 1)][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
+									{
+										continue;
+									}
+								}
+							}
+							else // row3 to rowN
+							{
+								if (ix + patchN - overlapPatchW < patchN)
+								{
+									//上一個row的right cut
+									if (iy >= allMebc[boundaryIndex - (patchColNum - 1) * 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
+									{
+										continue;
+									}
+								}
+							}
 
-								Vec3f a = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-								Vec3f b = blendingTest.at<Vec3b>(ox + ix, oy + iy);
+							outputWithCut.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+
+							if (ix == allMebc[boundaryIndex][iy].first)
+							{
+								outputWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
+
+								Vec3f a = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								Vec3f b = outputImg.at<Vec3b>(ox + ix, oy + iy);
 								Vec3f c = (a + b)*0.5;
 
-								blendingTest.at<Vec3b>(ox + ix, oy + iy) = c;
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = c;
 							}
 							else
 							{
-								blendingTest.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
 							}
 
 						}
 					}
+					patchIndex++;
+					boundaryIndex++;
 				}
-				patchIndex++;
-				boundaryIndex++;
-			}
-			else if (patchIndex % patchColNum == 0)	// col1
-			{
-				for (int iy = 0; iy < patchN; iy++)
+				else // except row1 and col1
 				{
-					for (int ix = allMebc[boundaryIndex][iy].first; ix < patchN; ix++)
+					// top down
+					for (int ix = 0; ix < patchN; ix++)
 					{
-						if (ox + ix >= targetImg.rows)
+						if (ox + ix >= outputImg.rows)
 							break;
 
-						// row2
-						if (patchIndex == patchColNum)
+						// 把cut當成起點(包含)
+						for (int iy = allMebc[boundaryIndex][ix].second; iy < patchN; iy++)
 						{
-							if (ix + patchN - overlapPatchW < patchN)
-							{			
-													//上一個row的right cut
-								if (iy >= allMebc[boundaryIndex - (patchColNum - 1)][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
-								{
-									continue;
-								}
-							}
-						}
-						else // row3 to rowN
-						{
-							if (ix + patchN - overlapPatchW < patchN)
+							if (oy + iy >= outputImg.cols)
+								break;
+
+							// row2
+							if (patchIndex < patchColNum * 2)
 							{
-													//上一個row的right cut
-								if (iy >= allMebc[boundaryIndex - (patchColNum - 1) * 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
+								if (ix + patchN - overlapPatchW < patchN && iy + patchN - overlapPatchW < patchN)
 								{
-									continue;
+									// 小於上一row的right cut且高於左邊的top cut不畫
+									if (iy < allMebc[boundaryIndex - patchIndex + 1][ix + patchN - overlapPatchW].second && ix < allMebc[boundaryIndex - 1][iy + patchN - overlapPatchW].first)
+									{
+										continue;
+									}
+								}
+
+								if (ix + patchN - overlapPatchW < patchN)
+								{
+									// 小於上一row的下一個right cut
+									if (iy >= allMebc[boundaryIndex - patchIndex + 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
+									{
+										continue;
+									}
+								}
+
+
+							}
+							else // row3 to rowN
+							{
+								if (ix + patchN - overlapPatchW < patchN && iy + patchN - overlapPatchW < patchN)
+								{
+									if (iy < allMebc[boundaryIndex - 2 * (patchColNum - 1) - 1][ix + patchN - overlapPatchW].second && ix < allMebc[boundaryIndex - 1][iy + patchN - overlapPatchW].first)
+									{
+										continue;
+									}
+								}
+
+								if (ix + patchN - overlapPatchW < patchN)
+								{
+
+									if (iy >= allMebc[boundaryIndex - 2 * (patchColNum - 1) - 1 + 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
+									{
+										continue;
+									}
 								}
 							}
+
+							// 超過top cut不覆蓋
+							if (ix < allMebc[boundaryIndex + 1][iy].first)
+							{
+								continue;
+							}
+
+							outputWithCut.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+
+							if (iy == allMebc[boundaryIndex][ix].second)
+							{
+								outputWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
+
+								Vec3f a = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								Vec3f b = outputImg.at<Vec3b>(ox + ix, oy + iy);
+								Vec3f c = (a + b)*0.5;
+
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = c;
+
+							}
+							else if (ix == allMebc[boundaryIndex + 1][iy].first)
+							{
+								outputWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
+
+								Vec3f a = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+								Vec3f b = outputImg.at<Vec3b>(ox + ix, oy + iy);
+								Vec3f c = (a + b)*0.5;
+
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = c;
+							}
+							else
+							{
+								outputImg.at<Vec3b>(ox + ix, oy + iy) = srcImg.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
+							}
+
 						}
-
-						targetWithCut.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-						targetImg.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-
-						if (ix == allMebc[boundaryIndex][iy].first)
-						{
-							targetWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
-
-							Vec3f a = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							Vec3f b = blendingTest.at<Vec3b>(ox + ix, oy + iy);
-							Vec3f c = (a + b)*0.5;
-
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = c;
-						}
-						else
-						{
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-						}
-
 					}
+
+					patchIndex++;
+					boundaryIndex += 2;
 				}
-				patchIndex++;
-				boundaryIndex++;
-			}
-			else // except row1 and col1
-			{
-				// top down
-				for (int ix = 0; ix < patchN; ix++)
-				{
-					if (ox + ix >= targetImg.rows)
-						break;
-
-					// 把cut當成起點(包含)
-					for (int iy = allMebc[boundaryIndex][ix].second; iy < patchN; iy++)
-					{
-						if (oy + iy >= targetImg.cols)
-							break;
-
-						// row2
-						if (patchIndex < patchColNum * 2)
-						{
-							if (ix + patchN - overlapPatchW < patchN && iy + patchN - overlapPatchW < patchN)
-							{
-								// 小於上一row的right cut且高於左邊的top cut不畫
-								if (iy < allMebc[boundaryIndex - patchIndex + 1][ix + patchN - overlapPatchW].second && ix < allMebc[boundaryIndex - 1][iy + patchN - overlapPatchW].first)
-								{
-									continue;
-								}
-							}
-
-							if (ix + patchN - overlapPatchW < patchN)
-							{
-								// 小於上一row的下一個right cut
-								if (iy >= allMebc[boundaryIndex - patchIndex + 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
-								{
-									continue;
-								}
-							}
-
-
-						}
-						else // row3 to rowN
-						{
-							if (ix + patchN - overlapPatchW < patchN && iy + patchN - overlapPatchW < patchN)
-							{
-								if (iy < allMebc[boundaryIndex - 2 * (patchColNum - 1) - 1][ix + patchN - overlapPatchW].second && ix < allMebc[boundaryIndex - 1][iy + patchN - overlapPatchW].first)
-								{
-									continue;
-								}
-							}
-
-							if (ix + patchN - overlapPatchW < patchN)
-							{
-
-								if (iy >= allMebc[boundaryIndex - 2 * (patchColNum - 1) - 1 + 2][ix + patchN - overlapPatchW].second + patchN - overlapPatchW)
-								{
-									continue;
-								}
-							}
-						}
-
-						// 超過top cut不覆蓋
-						if (ix < allMebc[boundaryIndex + 1][iy].first)
-						{
-							continue;
-						}
-
-						targetWithCut.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-						targetImg.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-
-						if (iy == allMebc[boundaryIndex][ix].second)
-						{
-							targetWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
-
-							Vec3f a = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							Vec3f b = blendingTest.at<Vec3b>(ox + ix, oy + iy);
-							Vec3f c = (a + b)*0.5;
-
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = c;
-
-						}
-						else if (ix == allMebc[boundaryIndex + 1][iy].first)
-						{
-							targetWithCut.at<Vec3b>(ox + ix, oy + iy) = Vec3b(255, 255, 255);
-
-							Vec3f a = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-							Vec3f b = blendingTest.at<Vec3b>(ox + ix, oy + iy);
-							Vec3f c = (a + b)*0.5;
-
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = c;
-						}
-						else
-						{
-							blendingTest.at<Vec3b>(ox + ix, oy + iy) = image01.at<Vec3b>(sourcePatches[patchIndex].first + ix, sourcePatches[patchIndex].second + iy);
-						}
-						
-					}
-				}
-
-				patchIndex++;
-				boundaryIndex += 2;
 			}
 		}
+
+		results.push_back(outputImg.clone());
 	}
 
-	imshow("image01", image01);
+	imshow("srcImg", srcImg);
 	imshow("targetImg", targetImg);
-	imshow("targetWithCut", targetWithCut);
-	imshow("blendingTest", blendingTest);
-	imshow("boundaryWithCut", test);
-	imshow("boundary", test2);
+	imshow("outputImg", outputImg);
+	imshow("outputWithCut", outputWithCut);
+
+	for (int i = 0; i < results.size(); i++)
+	{
+		string name = "Iteration" + to_string(i);
+		imshow(name, results[i]);
+	}
+
+	time_t e = time(NULL);
+
+	cout << "Time:" << (e - s) / 60 << "m" << endl;
 
 	waitKey(0);
 }
