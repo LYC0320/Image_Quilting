@@ -17,8 +17,8 @@ int main()
 
 	bool imgQuliting = 0, texTransfer = 1;
 
-	Mat srcImg = imread("texture/rice.bmp");
-	Mat targetImg = imread("texture/bill-big-big.jpg");
+	Mat srcImg = imread("texture/toast.png");
+	Mat targetImg = imread("texture/smiley.png");
 	Mat outputImg;
 
 	if (imgQuliting)
@@ -30,7 +30,7 @@ int main()
 
 	vector<Mat> results;
 
-	int patchN = 18;
+	int patchN = 12;
 	int overlapPatchW = patchN / 6;
 	int patchOffset = patchN - overlapPatchW;
 	int patchRowNum = (outputImg.rows % patchOffset == 0) ? outputImg.rows / patchOffset : outputImg.rows / patchOffset + 1;
@@ -84,7 +84,7 @@ int main()
 		float a;
 
 		if (N < 2)
-			a = 0.3;
+			a = 0.6;
 		else
 			a = 0.8 * (N - 1) / (iteration - 1) + 0.1;
 
@@ -111,7 +111,6 @@ int main()
 							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
 							{
 								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix, iy);
-								//cout << (float)targetChannels.at(2).at<uchar>(ix, iy) << endl;
 							}
 						}
 						cout << ox << "," << oy << endl;
@@ -136,7 +135,6 @@ int main()
 							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
 							{
 								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
-								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
 							}
 						}
 
@@ -161,7 +159,6 @@ int main()
 							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
 							{
 								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
-								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
 							}
 						}
 						cout << ox << "," << oy << endl;
@@ -194,7 +191,6 @@ int main()
 							for (int iy = 0; iy < overlapSquarePatch.cols; iy++)
 							{
 								overlapSquarePatch.at<uchar>(ix, iy) = targetChannels.at(2).at<uchar>(ix + patchOffset * ox, iy + patchOffset * oy);
-								//cout << overlapSquarePatch.at<uchar>(ix, iy) << endl;
 							}
 						}
 						cout << ox << "," << oy << endl;
@@ -207,7 +203,6 @@ int main()
 			}
 
 			sourcePatches = sourcePatches2;
-
 		}
 		else if (imgQuliting)
 		{
@@ -541,7 +536,7 @@ int main()
 
 	time_t e = time(NULL);
 
-	cout << "Time:" << (e - s) / 60 << "m" << endl;
+	cout << "Time:" << (e - s) << "s" << endl;
 
 	waitKey(0);
 }
